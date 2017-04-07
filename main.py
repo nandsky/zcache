@@ -45,27 +45,36 @@ class ClientHandler(object):
     def read_handler(self):
         data = self.cli_sock.recv(8192)
         if len(data) < 0:
-            print("some error")
+            #print("some error")
             self.remove_self()
             return
         if len(data) == 0:
-            print("client close!")
+            #print("client close!")
             self.remove_self()
             return
 
-        print data
+        #print data
         self.request.input_data(data)
-
+        print data
 
         if self.request.is_message_complete():
-            if "baidu" not in self.request.url.netloc:
-                return 
+            print self.request.url.netloc
+            if "360" not in self.request.url.netloc:
+                return
+            print "===================="
             key = self.request.url.scheme + "://" + self.request.url.netloc + self.request.url.path
             value = store.get_content(key)
             if value == None:
                 response = requests.get(key)
                 print "%s" % response.text
                 store.add(key, response.text)
+
+                requests.Response()
+                print response.raw
+
+            self.cli_sock.send(re)
+        else:
+            print '>>>>>>>>>>>>>'
 
 
 
