@@ -28,9 +28,11 @@ class EventManager(object):
         self.locker = None
 
     def run(self):
+        a = 1
         while True:
-            r, w, x = select.select(self.rlist, self.wlist, self.xlist, 1)
-
+            a += 1
+            r, w, x = select.select(self.rlist, [], self.xlist, 5)
+            print "-----------------: %d" % a
             # read handler
             for r_item in r:
                 self._do_handler(r_item, "r")

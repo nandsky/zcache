@@ -6,7 +6,10 @@ from events import event_manager
 from http import HttpParser
 from store import store
 import requests
+from collections import OrderedDict
+import json
 
+IP1 = "104.199.248.104"
 
 class Connection(object):
     """
@@ -40,10 +43,10 @@ class ClientHandler(object):
 
     def run(self):
         event_manager.add(self.cli_sock, "r", self.read_handler)
-        event_manager.add(self.cli_sock, "w", self.write_handler)
+        #event_manager.add(self.cli_sock, "w", self.write_handler)
 
     def read_handler(self):
-        data = self.cli_sock.recv(8192)
+        data = self.cli_sock.recv(81920)
         if len(data) < 0:
             #print("some error")
             self.remove_self()
@@ -55,24 +58,54 @@ class ClientHandler(object):
 
         #print data
         self.request.input_data(data)
-        print data
+        #print data
 
         if self.request.is_message_complete():
             print self.request.url.netloc
-            if "360" not in self.request.url.netloc:
-                return
+
             print "===================="
-            key = self.request.url.scheme + "://" + self.request.url.netloc + self.request.url.path
-            value = store.get_content(key)
-            if value == None:
-                response = requests.get(key)
-                print "%s" % response.text
-                store.add(key, response.text)
 
-                requests.Response()
-                print response.raw
+            key1 = "http://" + IP1 + self.request.url.geturl()
 
-            self.cli_sock.send(re)
+            print "try: %s, from: %s" % (key1, self.cli_addr)
+            headers = OrderedDict()
+            for k in self.request.headers:
+                tp = self.request.headers[k]
+                headers[tp[0]] = tp[1]
+
+            cc = json.dumps(headers)
+            #print cc
+            response = requests.get(key1, headers=headers, stream=True)
+            print "url: %s" % (key1)
+
+            cc = "%s %s %s" % (self.request.version, response.status_code, response.reason)
+            cc += b"\r\n"
+            for i in response.headers:
+                cc += i
+                cc += ": "
+                cc += response.headers[i]
+                cc += b"\r\n"
+
+            cc += b"\r\n"
+            cc += response.raw.read()
+
+            self.cli_sock.send(cc)
+            print "send: %s" % key1
+
+            # self.cli_sock.close()
+            #value = store.get_content(key)
+            #if value == None:
+            #    response = requests.get(key)
+            #    print "%s" % response.text
+            #    store.add(key, response.text)
+
+            #    requests.Response()
+            #    if not response.raw:
+            #        print type(response.raw)
+            #        print response.raw
+
+
+            #self.cli_sock.send(re)
         else:
             print '>>>>>>>>>>>>>'
 
@@ -124,9 +157,11 @@ class ProxyIn(object):
     def accept_handler(self):
         conn, addr = self.socket.accept()
         a = ClientHandler(conn, addr)
+        print addr
+        conn.setblocking(0)
         event_manager.add_sock(a.cli_sock, a.read_handler, a.write_handler)
 
 
 if __name__ == '__main__':
-    pi = ProxyIn("127.0.0.1", 6777)
+    pi = ProxyIn("192.168.1.224", 80)
     pi.run()

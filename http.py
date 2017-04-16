@@ -5,6 +5,7 @@
 """
 
 import urlparse
+from collections import OrderedDict
 
 # HTTP解析类型
 HTTP_REQUEST_PARSER = 1
@@ -75,7 +76,7 @@ class HttpParser(object):
 
         self.method = None
         self.url = None
-        self.headers = dict()
+        self.headers = OrderedDict()
         self.body = None
 
         self.code = None
