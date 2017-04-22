@@ -9,7 +9,14 @@ import requests
 from collections import OrderedDict
 import json
 
+# for HTTPConnection
+import http_requests
+
+
+
 IP1 = "104.199.248.104"
+IP1 = "59.108.139.1"
+
 
 class Connection(object):
     """
@@ -39,20 +46,27 @@ class ClientHandler(object):
         self.cli_addr = cli_addr
         self.need_write = False
 
+        self.send_data = b""
         self.request = HttpParser()
 
-    def run(self):
-        event_manager.add(self.cli_sock, "r", self.read_handler)
+    #def run(self):
+    #    event_manager.add(self.cli_sock, "r", self.read_handler)
         #event_manager.add(self.cli_sock, "w", self.write_handler)
 
     def read_handler(self):
-        data = self.cli_sock.recv(81920)
+        try:
+            data = self.cli_sock.recv(81920)
+        except socket.error as msg:
+            print msg
+            self.remove_self()
+            return
+
         if len(data) < 0:
-            #print("some error")
+            print("some error")
             self.remove_self()
             return
         if len(data) == 0:
-            #print("client close!")
+            print("client close!")
             self.remove_self()
             return
 
@@ -63,34 +77,65 @@ class ClientHandler(object):
         if self.request.is_message_complete():
             print self.request.url.netloc
 
-            print "===================="
+            print "====================:" + self.request.host
 
-            key1 = "http://" + IP1 + self.request.url.geturl()
+            key1 = "http://" + self.request.host + self.request.url.geturl()
 
             print "try: %s, from: %s" % (key1, self.cli_addr)
+
             headers = OrderedDict()
             for k in self.request.headers:
                 tp = self.request.headers[k]
                 headers[tp[0]] = tp[1]
 
             cc = json.dumps(headers)
-            #print cc
+            print cc
             response = requests.get(key1, headers=headers, stream=True)
+
+            content = response.raw.read()
             print "url: %s" % (key1)
+
+            print response.headers
+            if "Content-Encoding" in response.headers:
+                if response.headers["Content-Encoding"] == "gzip":
+
+                    print "len vs: %s, %s" % (response.headers["Content-Length"], str(len(content)))
+                    response.headers["Content-Length"] = str(len(content))
 
             cc = "%s %s %s" % (self.request.version, response.status_code, response.reason)
             cc += b"\r\n"
             for i in response.headers:
+                if i == "Transfer-Encoding":
+                    continue
                 cc += i
                 cc += ": "
                 cc += response.headers[i]
                 cc += b"\r\n"
-
             cc += b"\r\n"
-            cc += response.raw.read()
 
-            self.cli_sock.send(cc)
-            print "send: %s" % key1
+
+            pp_len = 0
+            #buff = ""
+            #for chunk in response.iter_content(chunk_size=1024):
+            #    if chunk:
+            #        buff += chunk
+            #        pp_len += len(chunk)
+            cc += content
+            self.send_data += cc
+            self.need_write = True
+            event_manager.add(self.cli_sock, "w", self.write_handler)
+            #while True:
+            #    tmp = response.raw.read(100)
+            #    if not tmp:
+            #        break
+            #    cc += tmp
+            #    tt1 += len(tmp)
+            #    print "cccc: :%d" % tt1
+            #print cc
+            #with open("test.html", "wb") as f:
+            #    f.write(cc)
+            #len1 = self.cli_sock.send(cc)
+            #print "send: %s, rawsize: %d, size: %d" % (key1, len(cc), len1)
 
             # self.cli_sock.close()
             #value = store.get_content(key)
@@ -109,11 +154,18 @@ class ClientHandler(object):
         else:
             print '>>>>>>>>>>>>>'
 
-
-
     def write_handler(self):
-        if not self.need_write:
-            return
+        #print 'write.....'
+        if len(self.send_data) > 0:
+
+            send_size = min(2048, len(self.send_data))
+            tmp = self.send_data[0:send_size]
+            self.send_data = self.send_data[send_size:]
+            if len(tmp) > 0:
+                self.cli_sock.send(tmp)
+            if len(self.send_data) == 0:
+                self.need_write = False
+                event_manager.remove(self.cli_sock, "w")
 
     def remove_self(self):
         if self.cli_sock:
@@ -158,10 +210,10 @@ class ProxyIn(object):
         conn, addr = self.socket.accept()
         a = ClientHandler(conn, addr)
         print addr
-        conn.setblocking(0)
+        #conn.setblocking(0)
         event_manager.add_sock(a.cli_sock, a.read_handler, a.write_handler)
 
 
 if __name__ == '__main__':
-    pi = ProxyIn("192.168.1.224", 80)
+    pi = ProxyIn("127.0.0.1", 80)
     pi.run()

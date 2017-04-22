@@ -28,23 +28,21 @@ class EventManager(object):
         self.locker = None
 
     def run(self):
-        a = 1
         while True:
-            a += 1
-            r, w, x = select.select(self.rlist, [], self.xlist, 5)
-            print "-----------------: %d" % a
+            r, w, x = select.select(self.rlist, self.wlist, self.xlist, 5)
+            #print self.wlist
             # read handler
             for r_item in r:
                 self._do_handler(r_item, "r")
             # write handler
             for w_item in w:
                 # read handler 和 write handler在共用一个socket时，会有冲突
-                if not w_item:
-                    self._do_handler(w_item, "w")
+                #if not w_item:
+                self._do_handler(w_item, "w")
             # exception handler
             for x_item in x:
-                if not x_item:
-                    self._do_handler(x_item, "x")
+                #if not x_item:
+                self._do_handler(x_item, "x")
 
             # 清理资源
 
@@ -65,6 +63,8 @@ class EventManager(object):
         if not handlers:
             return
 
+        if who not in handlers:
+            return
         if not handlers[who]:
             return
         handlers[who]()
@@ -81,11 +81,23 @@ class EventManager(object):
             self.rlist.append(who)
             self.r_handlers[who] = do_what
         elif event == "w":
-            self.wlist.append(who)
-            self.w_handlers[who] = do_what
+            if who not in self.wlist:
+                self.wlist.append(who)
+                self.w_handlers[who] = do_what
         elif event == "x":
             self.xlist.append(who)
             self.x_handlers[who] = do_what
+
+    def remove(self, who, event):
+        if event == "r":
+            if who in self.rlist:
+                self.rlist.remove(who)
+        elif event == "w":
+            if who in self.wlist:
+                self.wlist.remove(who)
+        elif event == "x":
+            if who in self.xlist:
+                self.xlist.remove(who)
 
     def add_sock(self, sock, do_in, do_out):
         self.add(sock, "r", do_in)
